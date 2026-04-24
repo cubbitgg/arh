@@ -1,0 +1,51 @@
+llm:
+  default:
+    provider: anthropic
+    model: claude-sonnet-4-20250514
+    api_key_env: ANTHROPIC_API_KEY
+
+concurrency:
+  logic_agent_parallelism: 4
+
+rules:
+  branch_pattern: "^(feat|fix|chore|refactor|docs|test|ci)/[a-z0-9-]+$"
+  require_conventional_commits: true
+  pr_title_max_length: 120
+  pr_description_required: true
+
+lint:
+  golangci_lint_path: golangci-lint
+  codestyle_rules:
+    - "Exported functions must have a godoc comment starting with the function name"
+    - "Error variables must be named errXxx, not just err when multiple errors exist in scope"
+    - "Context parameter must always be the first parameter"
+    - "Use domain-specific names: say userID not id, orderTotal not total"
+
+logic:
+  rules:
+    - id: no-swallowed-error
+      description: "Every if err != nil must return the error or log it, never silently ignore"
+    - id: error-wrap-context
+      description: "Error returns should wrap with fmt.Errorf describing the operation: fmt.Errorf(\"doing X: %w\", err)"
+    - id: log-else-branch
+      description: "Log statements in error paths should have a corresponding else or early return for the success path"
+    - id: require-unit-test
+      description: "New exported functions must have a corresponding _test.go test"
+      severity: warning
+    - id: require-e2e
+      description: "New API endpoints or use cases should have a corresponding e2e test scenario"
+      severity: warning
+
+focus:
+  ignore_patterns:
+    - "*.md"
+    - "*.yaml"
+    - "*.yml"
+    - "go.sum"
+    - "generated/**"
+
+jira:
+  enabled: false
+
+output:
+  terminal: true
