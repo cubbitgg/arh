@@ -9,7 +9,6 @@ import (
 var (
 	findingRe   = regexp.MustCompile(`(?s)<finding>(.*?)</finding>`)
 	fileFocusRe = regexp.MustCompile(`(?s)<file_focus>(.*?)</file_focus>`)
-	tagRe       = regexp.MustCompile(`(?s)<([a-z_]+)>(.*?)</([a-z_]+)>`)
 )
 
 // ParseFindings extracts Finding structs from an LLM XML response.

@@ -26,10 +26,6 @@ func NewRulesAgent(cfg *config.Config, llmClient llm.LLMClient) *RulesAgent {
 // Run performs deterministic checks and then enriches violations via LLM.
 func (a *RulesAgent) Run(ctx context.Context, pr *github.PRData) ([]Finding, error) {
 	violations := a.deterministic(pr)
-	if len(violations) == 0 && !a.cfg.Rules.PRDescriptionRequired {
-		// Still run LLM for title accuracy
-	}
-
 	findings, err := a.llmEnrichment(ctx, pr, violations)
 	if err != nil {
 		return violations, nil // return deterministic findings even if LLM fails
