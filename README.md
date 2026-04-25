@@ -1,5 +1,12 @@
 # arh — AI Review Helper
 
+[![CI](https://github.com/cubbitgg/arh/actions/workflows/ci.yml/badge.svg)](https://github.com/cubbitgg/arh/actions/workflows/ci.yml)
+[![Build](https://github.com/cubbitgg/arh/actions/workflows/ci.yml/badge.svg?event=push&label=build)](https://github.com/cubbitgg/arh/actions/workflows/ci.yml)
+[![Go Version](https://img.shields.io/github/go-mod/go-version/cubbitgg/arh?logo=go&logoColor=white)](go.mod)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Release](https://img.shields.io/github/v/release/cubbitgg/arh?logo=github)](https://github.com/cubbitgg/arh/releases)
+[![Go Report Card](https://goreportcard.com/badge/github.com/cubbitgg/arh)](https://goreportcard.com/report/github.com/cubbitgg/arh)
+
 A CLI tool that triages GitHub PRs before you review them. It fetches a PR, runs parallel analysis agents (rules, lint, logic, focus, Jira), and produces a structured report telling you what to focus on.
 
 `arh` is **not** an automated reviewer that posts comments. It's a local tool for human reviewers who want a head start.
@@ -29,6 +36,33 @@ LOGIC agent
      Suggestion: return fmt.Errorf("validating token: %w", err)
 ```
 
+## ✨ Features
+
+- **Five parallel agents** — Rules, Lint, Logic, Focus, and Jira run concurrently; a failing agent never blocks the others
+- **Three LLM providers** — Anthropic (Claude), OpenAI, and Ollama; each agent can use a different provider
+- **Deterministic + LLM hybrid** — branch pattern, conventional commits, and lint checks run locally; LLM only enriches and explains
+- **Interactive TUI** — Bubble Tea app with tabs per agent, scrollable findings, detail panel, severity filter, and one-key markdown export
+- **Multiple output formats** — terminal (static), interactive TUI, Markdown file, and JSON (CI-friendly)
+- **Customizable agent prompts** — override any agent's system prompt per repository without recompiling
+- **Jira integration** — extracts the linked issue key, fetches acceptance criteria, and flags scope creep or uncovered AC
+- **Zero comment posting** — reads PRs, never writes to them
+
+## ⚙️ What you can configure
+
+All behaviour is driven by `.arh.yaml`. Below is a summary — see [docs/configuration.md](docs/configuration.md) for the full reference.
+
+| Area | Configurable |
+|------|-------------|
+| **LLM** | Provider (`anthropic` / `openai` / `ollama`), model, API key env var, endpoint; per-agent overrides |
+| **Rules** | Branch name regex, conventional commits enforcement, required PR labels, title max length, description requirement |
+| **Lint** | Path to `golangci-lint`, extra flags, custom codestyle rules checked by LLM |
+| **Logic** | Custom rules with ID, description, and severity (`error` / `warning` / `info`) |
+| **Focus** | Glob patterns for files to deprioritize (e.g. `*.md`, `generated/**`) |
+| **Jira** | Base URL, API token, user email, issue key regex |
+| **Output** | Enable/disable terminal, markdown, JSON; file path templates with `{pr_number}` |
+| **Concurrency** | Max parallel LLM calls for the logic agent |
+| **Agent prompts** | Full system-prompt override per agent via `.arh/agents/<name>.md` — see [docs/prompt-customization.md](docs/prompt-customization.md) |
+
 ## Requirements
 
 - [gh CLI](https://cli.github.com/) — installed and authenticated (`gh auth login`)
@@ -46,7 +80,7 @@ Or build from source:
 ```bash
 git clone https://github.com/cubbitgg/arh.git
 cd arh
-go build -o arh ./cmd
+make build
 ```
 
 ## Quick start
@@ -71,15 +105,7 @@ arh init --agents             Also scaffold .arh/agents/ with built-in prompts
 arh version                   Print version
 ```
 
-### Flags for `arh review`
-
-| Flag | Description |
-|------|-------------|
-| `-a, --agents` | Comma-separated list of agents to run (default: all). E.g. `--agents=rules,lint` |
-| `-o, --output` | Output format: `terminal`, `markdown`, `json`, `all` |
-| `--no-tui` | Disable interactive TUI, use static terminal output |
-| `-c, --config` | Path to config file (default: `.arh.yaml`, then `~/.config/arh/.arh.yaml`) |
-| `-v, --verbose` | Show agent execution details |
+Run `arh review --help` for the full list of flags.
 
 ## Agents
 
@@ -90,33 +116,6 @@ arh version                   Print version
 | **Logic** | Error handling, test coverage, code correctness (per file) | LLM analysis against configurable rules |
 | **Focus** | Which files matter most for the reviewer | LLM prioritization of changes |
 | **Jira** | PR alignment with linked Jira ticket | Jira API + LLM comparison |
-
-## LLM providers
-
-arh supports three providers. Each agent can use a different one:
-
-```yaml
-llm:
-  default:
-    provider: anthropic
-    model: claude-sonnet-4-20250514
-    api_key_env: ANTHROPIC_API_KEY
-  overrides:
-    rules:
-      provider: ollama
-      model: qwen2.5-coder:14b
-      endpoint: http://localhost:11434
-    focus:
-      provider: openai
-      model: gpt-4o
-      api_key_env: OPENAI_API_KEY
-```
-
-| Provider | Config | Notes |
-|----------|--------|-------|
-| `anthropic` | `api_key_env` + `model` | Default. Uses Claude. |
-| `openai` | `api_key_env` + `model` | GPT-4o, etc. |
-| `ollama` | `endpoint` + `model` | Local, no API key needed. Must `ollama pull` the model first. |
 
 ## Output formats
 
@@ -140,30 +139,10 @@ llm:
 | `c` | Copy finding to clipboard |
 | `q` | Quit |
 
-## Customizing agent prompts
-
-Each agent's LLM prompt can be fully overridden per-repo:
-
-```bash
-arh init --agents    # scaffolds .arh/agents/ with built-in prompts
-```
-
-Edit any file in `.arh/agents/` to change what that agent checks and how it reasons. Keep `{{output_format}}` in your override to ensure structured output parsing still works.
-
-See [docs/prompt-customization.md](docs/prompt-customization.md) for details.
-
-## Configuration
-
-See [docs/configuration.md](docs/configuration.md) for the full config reference, or start with:
-
-```bash
-arh init
-```
-
 ## Documentation
 
-- [Architecture](docs/architecture.md) — how the orchestrator, agents, and report pipeline work
-- [Configuration](docs/configuration.md) — full `.arh.yaml` reference
+- [Architecture](docs/architecture.md) — orchestrator, agents, report pipeline, build system
+- [Configuration](docs/configuration.md) — full `.arh.yaml` reference with all fields, types, and defaults
 - [Prompt customization](docs/prompt-customization.md) — override agent prompts, template variables, design guidelines
 
 ## License
