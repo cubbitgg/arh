@@ -7,10 +7,9 @@ on:
     branches: [main]
 
 jobs:
-  build-and-test:
-    name: Build & Test
+  build:
+    name: Build
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -24,16 +23,43 @@ jobs:
       - name: Build
         run: make build
 
+  test:
+    name: Test & Vet
+    runs-on: ubuntu-latest
+    needs: build
+    permissions:
+      contents: read
+      checks: write
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
       - name: Vet
         run: make vet
 
+      - name: Install CTRF reporter
+        run: go install github.com/ctrf-io/go-ctrf-json-reporter/cmd/go-ctrf-json-reporter@latest
+
       - name: Test
-        run: make test
+        run: go test -json ./... | go-ctrf-json-reporter -output ctrf-report.json
+
+      - name: Publish test report
+        uses: ctrf-io/github-test-reporter@v1
+        with:
+          report-path: ctrf-report.json
+        if: always()
 
   lint:
     name: Lint
     runs-on: ubuntu-latest
-
+    needs: build
     steps:
       - name: Checkout
         uses: actions/checkout@v4

@@ -1,4 +1,4 @@
-.PHONY: build test vet fmt lint check clean install help
+.PHONY: build test vet fmt lint install-lint check clean install help
 .DEFAULT_GOAL := help
 
 BINARY  := arh
@@ -16,7 +16,10 @@ vet: ## run go vet
 fmt: ## check formatting (fails if any file needs reformatting)
 	@test -z "$$(gofmt -l .)" || (echo "gofmt: unformatted files:"; gofmt -l .; exit 1)
 
-lint: ## run golangci-lint (requires golangci-lint in PATH)
+install-lint: ## install golangci-lint if not already present
+	@which golangci-lint > /dev/null 2>&1 || go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+
+lint: install-lint ## run golangci-lint
 	golangci-lint run
 
 check: fmt vet test ## fmt + vet + test (full quality gate)
