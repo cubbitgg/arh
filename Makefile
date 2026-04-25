@@ -1,4 +1,4 @@
-.PHONY: build test vet fmt lint install-lint check clean install help
+.PHONY: build test vet fmt lint install-lint install-ctrf test-report check clean install help
 .DEFAULT_GOAL := help
 
 BINARY  := arh
@@ -22,6 +22,13 @@ install-lint: ## install golangci-lint if not already present
 lint: install-lint ## run golangci-lint
 	golangci-lint run
 
+install-ctrf: ## install go-ctrf-json-reporter if not already present
+	@which go-ctrf-json-reporter > /dev/null 2>&1 || go install github.com/ctrf-io/go-ctrf-json-reporter/cmd/go-ctrf-json-reporter@latest
+
+test-report: install-ctrf ## run tests and generate CTRF report (ctrf-report.json)
+	go test -json ./... > test-output.json
+	go-ctrf-json-reporter -output ctrf-report.json < test-output.json
+
 check: fmt vet test ## fmt + vet + test (full quality gate)
 
 clean: ## remove the compiled binary
@@ -32,4 +39,4 @@ install: ## install to GOPATH/bin
 
 help: ## list available targets
 	@grep -E '^[a-zA-Z_-]+:.*## ' $(MAKEFILE_LIST) \
-		| awk 'BEGIN {FS = ":.*## "}; {printf "  %-10s %s\n", $$1, $$2}'
+		| awk 'BEGIN {FS = ":.*## "}; {printf "  %-14s %s\n", $$1, $$2}'
