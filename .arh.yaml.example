@@ -1,34 +1,56 @@
+# arh configuration file
+# Full reference: docs/configuration.md
+
+# ─── LLM provider ───────────────────────────────────────────
 llm:
   default:
-    provider: anthropic
+    provider: anthropic          # anthropic | openai | ollama
     model: claude-sonnet-4-20250514
-    api_key_env: ANTHROPIC_API_KEY
+    api_key_env: ANTHROPIC_API_KEY  # env var name, NOT the key itself
 
+  # Per-agent overrides (optional — uncomment to use)
+  # overrides:
+  #   rules:
+  #     provider: ollama
+  #     model: qwen2.5-coder:14b
+  #     endpoint: http://localhost:11434
+  #   focus:
+  #     provider: openai
+  #     model: gpt-4o
+  #     api_key_env: OPENAI_API_KEY
+
+# ─── Concurrency ────────────────────────────────────────────
 concurrency:
-  logic_agent_parallelism: 4
+  logic_agent_parallelism: 4     # max concurrent LLM calls for logic agent
 
+# ─── Rules agent ────────────────────────────────────────────
 rules:
   branch_pattern: "^(feat|fix|chore|refactor|docs|test|ci)/[a-z0-9-]+$"
   require_conventional_commits: true
-  pr_title_max_length: 120
+  # required_labels:
+  #   - needs-review
+  pr_title_max_length: 72
   pr_description_required: true
 
+# ─── Lint agent ─────────────────────────────────────────────
 lint:
   golangci_lint_path: golangci-lint
+  # extra_args: []
   codestyle_rules:
     - "Exported functions must have a godoc comment starting with the function name"
     - "Error variables must be named errXxx, not just err when multiple errors exist in scope"
     - "Context parameter must always be the first parameter"
     - "Use domain-specific names: say userID not id, orderTotal not total"
 
+# ─── Logic agent ────────────────────────────────────────────
 logic:
   rules:
     - id: no-swallowed-error
       description: "Every if err != nil must return the error or log it, never silently ignore"
     - id: error-wrap-context
-      description: "Error returns should wrap with fmt.Errorf describing the operation: fmt.Errorf(\"doing X: %w\", err)"
+      description: "Error returns should wrap with fmt.Errorf describing the operation"
     - id: log-else-branch
-      description: "Log statements in error paths should have a corresponding else or early return for the success path"
+      description: "Log statements in error paths should have a corresponding else or early return"
     - id: require-unit-test
       description: "New exported functions must have a corresponding _test.go test"
       severity: warning
@@ -36,6 +58,7 @@ logic:
       description: "New API endpoints or use cases should have a corresponding e2e test scenario"
       severity: warning
 
+# ─── Focus agent ────────────────────────────────────────────
 focus:
   ignore_patterns:
     - "*.md"
@@ -44,8 +67,18 @@ focus:
     - "go.sum"
     - "generated/**"
 
-jira:
-  enabled: false
+# ─── Jira integration (optional) ────────────────────────────
+# jira:
+#   enabled: true
+#   base_url: https://mycompany.atlassian.net
+#   api_token_env: JIRA_API_TOKEN
+#   user_email_env: JIRA_USER_EMAIL
+#   issue_pattern: "[A-Z]{2,10}-\\d+"
 
+# ─── Output ─────────────────────────────────────────────────
 output:
   terminal: true
+  # markdown: true
+  # markdown_path: ./review-{pr_number}.md
+  # json: true
+  # json_path: ./review-{pr_number}.json

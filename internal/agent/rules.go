@@ -78,10 +78,10 @@ func (a *RulesAgent) deterministic(pr *github.PRData) []Finding {
 	for _, required := range cfg.RequiredLabels {
 		if !labelSet[required] {
 			findings = append(findings, Finding{
-				Agent:    "rules",
-				Severity: SeverityWarning,
-				RuleID:   "required-label",
-				Message:  fmt.Sprintf("PR is missing required label %q", required),
+				Agent:      "rules",
+				Severity:   SeverityWarning,
+				RuleID:     "required-label",
+				Message:    fmt.Sprintf("PR is missing required label %q", required),
 				Suggestion: fmt.Sprintf("Add label %q to the PR", required),
 			})
 		}
@@ -100,10 +100,10 @@ func (a *RulesAgent) deterministic(pr *github.PRData) []Finding {
 	// PR description required
 	if cfg.PRDescriptionRequired && strings.TrimSpace(pr.Body) == "" {
 		findings = append(findings, Finding{
-			Agent:    "rules",
-			Severity: SeverityWarning,
-			RuleID:   "pr-description-required",
-			Message:  "PR description is empty",
+			Agent:      "rules",
+			Severity:   SeverityWarning,
+			RuleID:     "pr-description-required",
+			Message:    "PR description is empty",
 			Suggestion: "Add a description explaining what this PR does and why",
 		})
 	}

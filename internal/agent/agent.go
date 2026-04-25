@@ -25,6 +25,9 @@ var logicBuiltinPrompt string
 //go:embed prompts/focus.md
 var focusBuiltinPrompt string
 
+//go:embed prompts/jira.md
+var jiraBuiltinPrompt string
+
 // Agent analyzes a PR and returns findings.
 type Agent interface {
 	Name() string
@@ -100,8 +103,21 @@ func (b *BaseAgent) injectVariables(tmpl string) string {
 		"{{output_format}}", b.outputFmt,
 		"{{ignore_patterns}}", b.cfg.IgnorePatternsAsText(),
 		"{{language}}", "Go",
+		"{{jira_issue_pattern}}", b.cfg.Jira.IssuePattern,
 	)
 	return r.Replace(tmpl)
+}
+
+// BuiltinPrompts returns all built-in agent prompt contents keyed by agent name.
+// Used by the init command to scaffold .arh/agents/ override files.
+func BuiltinPrompts() map[string]string {
+	return map[string]string{
+		"rules": rulesBuiltinPrompt,
+		"lint":  lintBuiltinPrompt,
+		"logic": logicBuiltinPrompt,
+		"focus": focusBuiltinPrompt,
+		"jira":  jiraBuiltinPrompt,
+	}
 }
 
 // completeLLM resolves the prompt and sends a request to the configured LLM.

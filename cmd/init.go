@@ -3,8 +3,13 @@ package main
 import (
 	"fmt"
 	"os"
+	"path/filepath"
+	"sort"
+	"strings"
 
 	"github.com/spf13/cobra"
+
+	"github.com/cubbitgg/arh/internal/agent"
 )
 
 const defaultConfig = `# arh configuration file
@@ -12,9 +17,19 @@ const defaultConfig = `# arh configuration file
 
 llm:
   default:
-    provider: anthropic
+    provider: anthropic          # anthropic | openai | ollama
     model: claude-sonnet-4-20250514
     api_key_env: ANTHROPIC_API_KEY
+  # Per-agent overrides (optional)
+  # overrides:
+  #   rules:
+  #     provider: ollama
+  #     model: qwen2.5-coder:14b
+  #     endpoint: http://localhost:11434
+  #   focus:
+  #     provider: openai
+  #     model: gpt-4o
+  #     api_key_env: OPENAI_API_KEY
 
 concurrency:
   logic_agent_parallelism: 4
@@ -53,12 +68,25 @@ focus:
     - "go.sum"
     - "generated/**"
 
+# Jira integration (optional)
+# jira:
+#   enabled: true
+#   base_url: https://mycompany.atlassian.net
+#   api_token_env: JIRA_API_TOKEN
+#   user_email_env: JIRA_USER_EMAIL
+#   issue_pattern: "[A-Z]{2,10}-\\d+"
+
 output:
   terminal: true
+  # markdown: true
+  # markdown_path: ./review-{pr_number}.md
+  # json: true
+  # json_path: ./review-{pr_number}.json
 `
 
 func init() {
 	rootCmd.AddCommand(initCmd)
+	initCmd.Flags().Bool("agents", false, "also scaffold .arh/agents/ directory with built-in prompt files")
 }
 
 var initCmd = &cobra.Command{
@@ -77,5 +105,49 @@ func runInit(cmd *cobra.Command, args []string) error {
 	}
 	fmt.Fprintf(os.Stdout, "Created %s — edit it to match your project's conventions.\n", target)
 	fmt.Fprintln(os.Stdout, "Set ANTHROPIC_API_KEY and run: arh review <owner/repo#N>")
+
+	scaffoldAgents, _ := cmd.Flags().GetBool("agents")
+	if scaffoldAgents {
+		if err := writeAgentPrompts(); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func writeAgentPrompts() error {
+	dir := filepath.Join(".arh", "agents")
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return fmt.Errorf("creating %s: %w", dir, err)
+	}
+
+	prompts := agent.BuiltinPrompts()
+
+	// Sort names for deterministic output.
+	names := make([]string, 0, len(prompts))
+	for name := range prompts {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	var skipped []string
+	for _, name := range names {
+		target := filepath.Join(dir, name+".md")
+		if _, err := os.Stat(target); err == nil {
+			skipped = append(skipped, target)
+			continue
+		}
+		if err := os.WriteFile(target, []byte(prompts[name]), 0644); err != nil {
+			return fmt.Errorf("writing %s: %w", target, err)
+		}
+		fmt.Fprintf(os.Stdout, "Created %s\n", target)
+	}
+
+	if len(skipped) > 0 {
+		fmt.Fprintf(os.Stderr, "Skipped (already exist): %s\n", strings.Join(skipped, ", "))
+	}
+	fmt.Fprintln(os.Stdout, "Customize these files to tailor agent behavior — keep {{output_format}} to preserve structured output.")
+
 	return nil
 }

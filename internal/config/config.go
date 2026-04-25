@@ -131,6 +131,21 @@ func applyDefaults(cfg *Config) {
 	if cfg.LLM.Default.APIKeyEnv == "" {
 		cfg.LLM.Default.APIKeyEnv = "ANTHROPIC_API_KEY"
 	}
+	if cfg.Jira.IssuePattern == "" {
+		cfg.Jira.IssuePattern = `[A-Z]{2,10}-\d+`
+	}
+	if cfg.Jira.APITokenEnv == "" {
+		cfg.Jira.APITokenEnv = "JIRA_API_TOKEN"
+	}
+	if cfg.Jira.UserEmailEnv == "" {
+		cfg.Jira.UserEmailEnv = "JIRA_USER_EMAIL"
+	}
+	if cfg.Output.Markdown && cfg.Output.MarkdownPath == "" {
+		cfg.Output.MarkdownPath = "./review-{pr_number}.md"
+	}
+	if cfg.Output.JSON && cfg.Output.JSONPath == "" {
+		cfg.Output.JSONPath = "./review-{pr_number}.json"
+	}
 }
 
 // LLMConfigFor returns the LLM config for the given agent, applying overrides.

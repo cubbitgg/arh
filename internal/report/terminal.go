@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"sort"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
@@ -16,42 +15,49 @@ import (
 
 // TerminalRenderer renders a report to the terminal using lipgloss colors.
 type TerminalRenderer struct {
+	w            io.Writer
 	colorEnabled bool
 }
 
-// NewTerminalRenderer creates a renderer that auto-detects TTY.
+// NewTerminalRenderer creates a renderer that writes to stdout and auto-detects TTY.
 func NewTerminalRenderer() *TerminalRenderer {
 	return &TerminalRenderer{
+		w:            os.Stdout,
 		colorEnabled: term.IsTerminal(int(os.Stdout.Fd())),
 	}
 }
 
-// Render writes the full report to w.
-func (r *TerminalRenderer) Render(w io.Writer, rep *orchestrator.Report) {
-	if r.colorEnabled {
-		r.renderColor(w, rep)
-	} else {
-		r.renderPlain(w, rep)
-	}
+// NewTerminalRendererTo creates a renderer that writes to w (useful for testing).
+func NewTerminalRendererTo(w io.Writer) *TerminalRenderer {
+	return &TerminalRenderer{w: w}
 }
 
-func (r *TerminalRenderer) renderColor(w io.Writer, rep *orchestrator.Report) {
-	boldStyle    := lipgloss.NewStyle().Bold(true)
-	headerStyle  := lipgloss.NewStyle().Bold(true).Underline(true).Foreground(lipgloss.Color("39"))
-	errorStyle   := lipgloss.NewStyle().Foreground(lipgloss.Color("196")).Bold(true)
-	warningStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("214")).Bold(true)
-	infoStyle    := lipgloss.NewStyle().Foreground(lipgloss.Color("33"))
-	fileStyle    := lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
-	suggStyle    := lipgloss.NewStyle().Foreground(lipgloss.Color("242"))
-	dimStyle     := lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
+// Render writes the full report to the terminal.
+func (r *TerminalRenderer) Render(rep *orchestrator.Report) error {
+	if r.colorEnabled {
+		r.renderColor(rep)
+	} else {
+		r.renderPlain(rep)
+	}
+	return nil
+}
 
+func (r *TerminalRenderer) renderColor(rep *orchestrator.Report) {
+	boldStyle := lipgloss.NewStyle().Bold(true)
+	headerStyle := lipgloss.NewStyle().Bold(true).Underline(true).Foreground(lipgloss.Color("39"))
+	errorStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("196")).Bold(true)
+	warningStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("214")).Bold(true)
+	infoStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("33"))
+	fileStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
+	suggStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("242"))
+	dimStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
+
+	w := r.w
 	pr := rep.PR
 
-	// Header
 	fmt.Fprintln(w, headerStyle.Render(fmt.Sprintf("PR #%d: %s", pr.Number, pr.Title)))
 	fmt.Fprintln(w, dimStyle.Render(fmt.Sprintf("  %s → %s", pr.BranchName, pr.BaseSHA[:8])))
 
-	// Severity counts
 	errors, warnings, infos := countSeverities(rep.Findings)
 	fmt.Fprintf(w, "  %s  %s  %s\n\n",
 		errorStyle.Render(fmt.Sprintf("✖ %d errors", errors)),
@@ -59,7 +65,6 @@ func (r *TerminalRenderer) renderColor(w io.Writer, rep *orchestrator.Report) {
 		infoStyle.Render(fmt.Sprintf("ℹ %d info", infos)),
 	)
 
-	// Focus section
 	focusItems := filterByAgent(rep.Findings, "focus")
 	if len(focusItems) > 0 {
 		fmt.Fprintln(w, headerStyle.Render("Files to review"))
@@ -72,8 +77,7 @@ func (r *TerminalRenderer) renderColor(w io.Writer, rep *orchestrator.Report) {
 		fmt.Fprintln(w)
 	}
 
-	// Per-agent sections
-	agentOrder := []string{"rules", "lint", "logic"}
+	agentOrder := []string{"rules", "lint", "logic", "jira"}
 	for _, agentName := range agentOrder {
 		agentFindings := filterByAgent(rep.Findings, agentName)
 		if len(agentFindings) == 0 {
@@ -84,19 +88,12 @@ func (r *TerminalRenderer) renderColor(w io.Writer, rep *orchestrator.Report) {
 		for _, f := range agentFindings {
 			icon, style := severityStyle(f.Severity, errorStyle, warningStyle, infoStyle)
 			location := ""
-			if f.File != "" {
-				loc := f.File
-				if f.LineStart > 0 {
-					loc = fmt.Sprintf("%s:%d", f.File, f.LineStart)
-					if f.LineEnd > f.LineStart {
-						loc = fmt.Sprintf("%s-%d", loc, f.LineEnd)
-					}
-				}
+			if loc := formatLocation(f); loc != "" {
 				location = fileStyle.Render(loc) + " "
 			}
 			ruleLabel := ""
 			if f.RuleID != "" {
-				ruleLabel = dimStyle.Render("["+f.RuleID+"] ")
+				ruleLabel = dimStyle.Render("[" + f.RuleID + "] ")
 			}
 			fmt.Fprintf(w, "  %s %s%s%s\n", style.Render(icon), location, ruleLabel, f.Message)
 			if f.Suggestion != "" {
@@ -109,7 +106,8 @@ func (r *TerminalRenderer) renderColor(w io.Writer, rep *orchestrator.Report) {
 	}
 }
 
-func (r *TerminalRenderer) renderPlain(w io.Writer, rep *orchestrator.Report) {
+func (r *TerminalRenderer) renderPlain(rep *orchestrator.Report) {
+	w := r.w
 	pr := rep.PR
 	fmt.Fprintf(w, "PR #%d: %s\n", pr.Number, pr.Title)
 	fmt.Fprintf(w, "Branch: %s -> %s\n", pr.BranchName, pr.BaseSHA)
@@ -127,7 +125,7 @@ func (r *TerminalRenderer) renderPlain(w io.Writer, rep *orchestrator.Report) {
 		fmt.Fprintln(w)
 	}
 
-	agentOrder := []string{"rules", "lint", "logic"}
+	agentOrder := []string{"rules", "lint", "logic", "jira"}
 	for _, agentName := range agentOrder {
 		agentFindings := filterByAgent(rep.Findings, agentName)
 		if len(agentFindings) == 0 {
@@ -137,12 +135,8 @@ func (r *TerminalRenderer) renderPlain(w io.Writer, rep *orchestrator.Report) {
 		sortBySeverity(agentFindings)
 		for _, f := range agentFindings {
 			loc := ""
-			if f.File != "" {
-				loc = f.File
-				if f.LineStart > 0 {
-					loc = fmt.Sprintf("%s:%d", loc, f.LineStart)
-				}
-				loc = " " + loc
+			if l := formatLocation(f); l != "" {
+				loc = " " + l
 			}
 			rule := ""
 			if f.RuleID != "" {
@@ -154,67 +148,6 @@ func (r *TerminalRenderer) renderPlain(w io.Writer, rep *orchestrator.Report) {
 			}
 		}
 		fmt.Fprintln(w)
-	}
-}
-
-func countSeverities(findings []agent.Finding) (errors, warnings, infos int) {
-	for _, f := range findings {
-		switch f.Severity {
-		case agent.SeverityError:
-			errors++
-		case agent.SeverityWarning:
-			warnings++
-		case agent.SeverityInfo:
-			infos++
-		}
-	}
-	return
-}
-
-func filterByAgent(findings []agent.Finding, agentName string) []agent.Finding {
-	var out []agent.Finding
-	for _, f := range findings {
-		if f.Agent == agentName {
-			out = append(out, f)
-		}
-	}
-	return out
-}
-
-func sortBySeverity(findings []agent.Finding) {
-	order := map[agent.Severity]int{
-		agent.SeverityError:   0,
-		agent.SeverityWarning: 1,
-		agent.SeverityInfo:    2,
-	}
-	sort.Slice(findings, func(i, j int) bool {
-		oi, oj := order[findings[i].Severity], order[findings[j].Severity]
-		if oi != oj {
-			return oi < oj
-		}
-		if findings[i].File != findings[j].File {
-			return findings[i].File < findings[j].File
-		}
-		return findings[i].LineStart < findings[j].LineStart
-	})
-}
-
-func sortByPriority(findings []agent.Finding) {
-	order := map[string]int{"focus-high": 0, "focus-medium": 1, "focus-low": 2}
-	sort.Slice(findings, func(i, j int) bool {
-		oi, oj := order[findings[i].RuleID], order[findings[j].RuleID]
-		return oi < oj
-	})
-}
-
-func priorityIcon(ruleID string) string {
-	switch ruleID {
-	case "focus-high":
-		return "🔴"
-	case "focus-medium":
-		return "🟡"
-	default:
-		return "🟢"
 	}
 }
 
